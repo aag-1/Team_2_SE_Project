@@ -3,3 +3,4 @@ TEAM 2 SECTION A SEM 5
 PES2UG24CS018 - Aayush Gupta, 
 PES2UG24CS044 - Aks Raj Singh, 
 PES2UG24CS012 - Aaron Sijo, 
+PES2UG24CS035 - Aditya Sehal,
