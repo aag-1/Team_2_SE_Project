@@ -1,0 +1,17 @@
+{
+  "window": {
+    "width": 1100,
+    "height": 760,
+    "title": "Traffic Management System — Simulation"
+  },
+  "simulation": {
+    "tick_rate": 60,
+    "spawn_interval_seconds": 1.25,
+    "vehicle_speed": 145,
+    "vehicle_length": 30,
+    "vehicle_gap": 13,
+    "green_seconds": 12,
+    "amber_seconds": 3,
+    "red_clearance_seconds": 1
+  }
+}
