@@ -7,6 +7,10 @@ import pygame
 from simulation.signals import SignalController
 from simulation.metrics import Metrics
 from simulation.traffic import TrafficSimulation
+from simulation.events import EventLogger
+from simulation.congestion import status_label
+from simulation.incident import IncidentManager
+from simulation.auth import AuthManager
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 CONFIG_PATH = BASE_DIR / "data" / "scenarios.json"
@@ -30,6 +34,21 @@ def load_config():
         return json.load(handle)
 
 
+def build_kpi(metrics, queue_len: int, thresholds: dict | None = None) -> dict:
+    """Pure KPI helper for tests + dashboard (TMS-F-016, TC-GUI-01)."""
+    avg_wait = metrics.average_wait_seconds
+    active = len(getattr(metrics, "_vehicles", [])) if hasattr(metrics, "_vehicles") else metrics.active_count
+    return {
+        "active": metrics.active_count,
+        "generated": metrics.spawned,
+        "throughput": metrics.completed,
+        "throughput_per_min": round(metrics.throughput_per_minute, 2),
+        "queue": int(queue_len),
+        "avg_wait": round(avg_wait, 2),
+        "status": status_label(int(queue_len), float(avg_wait), int(metrics.active_count), thresholds),
+    }
+
+
 def run_app():
     config = load_config()
     pygame.init()
@@ -51,13 +70,23 @@ def run_app():
                             sim_cfg["vehicle_gap"], sim_cfg["spawn_interval_seconds"])
     paused = False
     spawn_interval = sim.spawn_interval
+    logger = EventLogger()
+    logger.log("SIM_READY", {"msg": "Simulation ready"})
     events = ["Simulation ready"]
     event_timer = 0.0
+    incidents = IncidentManager()
+    sim.incident_manager = incidents
+    auth = AuthManager()
+    thresholds = sim_cfg.get("thresholds", {})
 
-    def log(message):
+    def log(message, etype="INFO"):
         stamp = datetime.now().strftime("%H:%M:%S")
         events.insert(0, f"{stamp}  {message}")
         del events[8:]
+        try:
+            logger.log(etype, {"msg": message})
+        except Exception:
+            pass
 
     def draw_text(text, x, y, color=None, selected_font=None):
         screen.blit((selected_font or font).render(str(text), True, color or COLORS["text"]), (x, y))
@@ -105,13 +134,18 @@ def run_app():
 
     def draw_panel():
         panel_x = 18
-        pygame.draw.rect(screen, COLORS["panel"], (panel_x, 16, 330, 174), border_radius=10)
+        kpi = build_kpi(metrics, sim.queue_length(), thresholds)
+        pygame.draw.rect(screen, COLORS["panel"], (panel_x, 16, 330, 210), border_radius=10)
         draw_text("TRAFFIC MANAGEMENT SIMULATOR", 32, 28, selected_font=small)
         draw_text(f"Vehicles active: {len(sim.vehicles)}", 32, 55)
         draw_text(f"Vehicles generated: {metrics.spawned}", 32, 82)
-        draw_text(f"Throughput: {metrics.completed}", 32, 109)
+        draw_text(f"Throughput: {metrics.completed} ({kpi['throughput_per_min']}/min)", 32, 109)
         draw_text(f"Queue length: {sim.queue_length()}", 32, 136)
         draw_text(f"Average wait: {metrics.average_wait_seconds:.1f} s", 32, 163)
+        draw_text(f"Status: {kpi['status']}", 32, 184, COLORS["red"] if kpi['status'] == "CONGESTED" else COLORS["green"])
+        draw_text(f"User role: {auth.role}{' (auth)' if auth.authenticated else ''}", 32, 203, COLORS["muted"], small)
+        if incidents.active:
+            draw_text(incidents.banner(), 32, 222, COLORS["red"], small)
         # Event log panel
         pygame.draw.rect(screen, COLORS["panel"], (width-330, 16, 312, 174), border_radius=10)
         draw_text("EVENT LOG", width-312, 28, selected_font=small)
@@ -147,13 +181,42 @@ def run_app():
                     sim.reset()
                     log("Simulation reset")
                 elif event.key == pygame.K_UP:
-                    spawn_interval = max(0.25, spawn_interval - 0.15)
-                    sim.spawn_interval = spawn_interval
+                    spawn_interval = sim.set_spawn_interval(spawn_interval - 0.15)
                     log(f"Traffic rate increased ({spawn_interval:.2f}s interval)")
                 elif event.key == pygame.K_DOWN:
-                    spawn_interval = min(5.0, spawn_interval + 0.15)
-                    sim.spawn_interval = spawn_interval
+                    spawn_interval = sim.set_spawn_interval(spawn_interval + 0.15)
                     log(f"Traffic rate decreased ({spawn_interval:.2f}s interval)")
+                elif event.key == pygame.K_i:
+                    ok, msg = auth.require("incident")
+                    if not ok:
+                        log(f"Denied incident toggle: {msg}", "SEC_DENY")
+                    elif incidents.active:
+                        incidents.clear()
+                        log("Incident cleared", "INCIDENT_CLEAR")
+                    else:
+                        incidents.trigger(["N", "S"], "Stalled vehicle N/S")
+                        log("Incident triggered N/S", "INCIDENT")
+                elif event.key == pygame.K_l:
+                    try:
+                        logger.save_jsonl(BASE_DIR / "event_log.jsonl")
+                        log("Event log exported", "LOG_EXPORT")
+                    except Exception as ex:
+                        log(f"Log export failed: {ex}", "ERROR")
+                elif event.key == pygame.K_o:
+                    if auth.authenticated:
+                        auth.logout()
+                        log("Logged out to operator", "AUTH")
+                    else:
+                        auth.login_demo_admin()
+                        log("Demo admin login", "AUTH")
+                elif event.key == pygame.K_1:
+                    auth.set_role("operator")
+                    log(f"Role -> operator", "ROLE")
+                elif event.key == pygame.K_2:
+                    if auth.set_role("analyst"):
+                        log("Role -> analyst", "ROLE")
+                    else:
+                        log("Role change denied", "SEC_DENY")
 
         if not paused:
             transition = signals.update(dt)
