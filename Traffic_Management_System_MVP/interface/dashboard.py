@@ -43,8 +43,25 @@ def run_app():
     large = pygame.font.SysFont("arial", 26, bold=True)
 
     sim_cfg = config["simulation"]
-    signals = SignalController(sim_cfg["green_seconds"], sim_cfg["amber_seconds"],
-                               sim_cfg["red_clearance_seconds"])
+
+    signals = SignalController(
+        green_seconds=sim_cfg["green_seconds"],
+        amber_seconds=sim_cfg["amber_seconds"],
+        red_clearance_seconds=sim_cfg["red_clearance_seconds"],
+        phase_sequence=tuple(
+            sim_cfg.get(
+                "phase_sequence",
+                [
+                    "NS_GREEN",
+                    "NS_AMBER",
+                    "ALL_RED_TO_EW",
+                    "EW_GREEN",
+                    "EW_AMBER",
+                    "ALL_RED_TO_NS"
+                ]
+            )
+        )
+    )
     metrics = Metrics()
     sim = TrafficSimulation(width, height, signals, metrics,
                             sim_cfg["vehicle_speed"], sim_cfg["vehicle_length"],

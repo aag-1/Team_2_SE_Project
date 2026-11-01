@@ -43,3 +43,20 @@ def test_signal_uses_configured_phase_sequence():
         controller.elapsed = controller._phase_duration()
         assert controller.update(0) == expected_phase
         assert controller.phase == expected_phase
+
+def test_signal_follows_custom_phase_sequence():
+    custom_sequence = (
+        "NS_GREEN",
+        "EW_GREEN",
+        "NS_GREEN",
+    )
+
+    controller = SignalController(
+        green_seconds=1,
+        amber_seconds=1,
+        red_clearance_seconds=0.5,
+        phase_sequence=custom_sequence,
+    )
+
+    assert controller.update(1) == "EW_GREEN"
+    assert controller.update(1) == "NS_GREEN"
