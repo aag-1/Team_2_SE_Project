@@ -1,0 +1,13 @@
+# Visual Studio
+.vs/
+
+# Python virtual environments
+.venv/
+**/.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Pytest cache
+.pytest_cache/
