@@ -28,10 +28,14 @@ class Vehicle:
             self.x -= distance
 
 
+MIN_SPAWN_INTERVAL = 0.25
+MAX_SPAWN_INTERVAL = 5.0
+
+
 class TrafficSimulation:
     def __init__(self, width: int, height: int, signals, metrics,
                  vehicle_speed=145.0, vehicle_length=30.0, vehicle_gap=13.0,
-                 spawn_interval=1.25, seed=7):
+                 spawn_interval=1.25, seed=7, incident_manager=None):
         self.width, self.height = width, height
         self.cx, self.cy = width / 2, height / 2
         self.road_half = 72
@@ -45,11 +49,20 @@ class TrafficSimulation:
         self.vehicles: list[Vehicle] = []
         self.rng = random.Random(seed)
         self.running_time = 0.0
+        self.incident_manager = incident_manager
+        self.spawn_count = 0  # total generated (TMS-F-003 evidence)
+
+    def set_spawn_interval(self, seconds: float) -> float:
+        """Set arrival-rate interval, clamped to [0.25, 5.0] (TMS-F-003)."""
+        clamped = max(MIN_SPAWN_INTERVAL, min(MAX_SPAWN_INTERVAL, float(seconds)))
+        self.spawn_interval = clamped
+        return clamped
 
     def reset(self) -> None:
         self.vehicles.clear()
         self.spawn_elapsed = 0.0
         self.running_time = 0.0
+        self.spawn_count = 0
         self.metrics.spawned = 0
         self.metrics.completed = 0
         self.metrics.total_wait_seconds = 0.0
@@ -87,12 +100,16 @@ class TrafficSimulation:
         directions = list(DIRECTIONS)
         self.rng.shuffle(directions)
         for direction in directions:
+            # TMS-F-014: incident blocks spawning from blocked directions
+            if self.incident_manager is not None and self.incident_manager.is_blocked(direction):
+                continue
             if self._can_spawn(direction):
                 x, y = self._spawn_position(direction)
                 color = self.rng.choice([(45, 125, 220), (235, 165, 45), (70, 175, 115), (180, 95, 190), (220, 90, 85)])
                 self.vehicles.append(Vehicle(direction, x, y, self.vehicle_speed,
                                              self.vehicle_length, color=color))
                 self.metrics.spawned += 1
+                self.spawn_count += 1
                 break
 
     def _stop_limit(self, car):
@@ -144,6 +161,10 @@ class TrafficSimulation:
 
         for car in list(self.vehicles):
             signal = self.signals.state_for(car.direction)
+            # TMS-F-014: incident-blocked approach behaves as RED (hold before entry)
+            if self.incident_manager is not None and self.incident_manager.is_blocked(car.direction):
+                if not self._is_in_intersection(car):
+                    signal = "RED"
             distance = self._distance_to_stop(car)
             can_enter = signal == "GREEN" or self._is_in_intersection(car)
             proposed = self.vehicle_speed * dt

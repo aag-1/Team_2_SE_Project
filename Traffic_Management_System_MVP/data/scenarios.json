@@ -12,6 +12,11 @@
     "vehicle_gap": 13,
     "green_seconds": 12,
     "amber_seconds": 3,
-    "red_clearance_seconds": 1
+    "red_clearance_seconds": 1,
+    "thresholds": {
+      "queue_length": 12,
+      "avg_wait_seconds": 15.0,
+      "active_vehicles": 40
+    }
   }
 }
