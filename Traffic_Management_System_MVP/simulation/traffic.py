@@ -1,3 +1,4 @@
+
 """Vehicle model and traffic simulation update logic."""
 from dataclasses import dataclass
 import random
@@ -59,7 +60,6 @@ class TrafficSimulation:
         self.signals.phase = "NS_GREEN"
 
     def _spawn_position(self, direction):
-        offset = self.road_half + 24
         if direction == "N":
             return self.cx - 20, -35
         if direction == "S":
@@ -70,9 +70,11 @@ class TrafficSimulation:
 
     def _can_spawn(self, direction) -> bool:
         x, y = self._spawn_position(direction)
+
         for car in self.vehicles:
             if car.direction != direction:
                 continue
+
             if direction == "N" and car.y < 0 and abs(car.x - x) < 2 and abs(car.y - y) < self.vehicle_length + self.vehicle_gap:
                 return False
             if direction == "S" and car.y > self.height and abs(car.x - x) < 2 and abs(car.y - y) < self.vehicle_length + self.vehicle_gap:
@@ -81,45 +83,68 @@ class TrafficSimulation:
                 return False
             if direction == "E" and car.x > self.width and abs(car.y - y) < 2 and abs(car.x - x) < self.vehicle_length + self.vehicle_gap:
                 return False
+
         return True
 
     def _spawn(self):
         directions = list(DIRECTIONS)
         self.rng.shuffle(directions)
+
         for direction in directions:
             if self._can_spawn(direction):
                 x, y = self._spawn_position(direction)
-                color = self.rng.choice([(45, 125, 220), (235, 165, 45), (70, 175, 115), (180, 95, 190), (220, 90, 85)])
-                self.vehicles.append(Vehicle(direction, x, y, self.vehicle_speed,
-                                             self.vehicle_length, color=color))
+                color = self.rng.choice([
+                    (45, 125, 220),
+                    (235, 165, 45),
+                    (70, 175, 115),
+                    (180, 95, 190),
+                    (220, 90, 85)
+                ])
+
+                self.vehicles.append(
+                    Vehicle(
+                        direction,
+                        x,
+                        y,
+                        self.vehicle_speed,
+                        self.vehicle_length,
+                        color=color
+                    )
+                )
                 self.metrics.spawned += 1
                 break
 
     def _stop_limit(self, car):
         stop = self.road_half + 7
+
         if car.direction == "N":
             return self.cy - stop - car.length / 2
         if car.direction == "S":
             return self.cy + stop + car.length / 2
         if car.direction == "W":
             return self.cx - stop - car.length / 2
+
         return self.cx + stop + car.length / 2
 
     def _distance_to_stop(self, car):
         limit = self._stop_limit(car)
+
         if car.direction == "N":
             return limit - car.y
         if car.direction == "S":
             return car.y - limit
         if car.direction == "W":
             return limit - car.x
+
         return car.x - limit
 
     def _car_ahead_gap(self, car):
         gap = float("inf")
+
         for other in self.vehicles:
             if other is car or other.direction != car.direction:
                 continue
+
             if car.direction == "N" and other.y > car.y:
                 gap = min(gap, other.y - car.y - car.length)
             elif car.direction == "S" and other.y < car.y:
@@ -128,16 +153,20 @@ class TrafficSimulation:
                 gap = min(gap, other.x - car.x - car.length)
             elif car.direction == "E" and other.x < car.x:
                 gap = min(gap, car.x - other.x - car.length)
+
         return gap
 
     def _is_in_intersection(self, car):
-        return (self.cx - self.road_half - car.length <= car.x <= self.cx + self.road_half + car.length
-                and self.cy - self.road_half - car.length <= car.y <= self.cy + self.road_half + car.length)
+        return (
+            self.cx - self.road_half - car.length <= car.x <= self.cx + self.road_half + car.length
+            and self.cy - self.road_half - car.length <= car.y <= self.cy + self.road_half + car.length
+        )
 
     def update(self, dt: float):
         self.running_time += dt
         self.metrics.elapsed_seconds += dt
         self.spawn_elapsed += dt
+
         while self.spawn_elapsed >= self.spawn_interval:
             self.spawn_elapsed -= self.spawn_interval
             self._spawn()
@@ -150,10 +179,15 @@ class TrafficSimulation:
 
             if not can_enter and distance >= 0 and proposed >= distance:
                 proposed = max(0.0, distance)
+
             ahead = self._car_ahead_gap(car)
             safe_gap = self.vehicle_gap
+
             if ahead < self.vehicle_length + safe_gap:
-                proposed = min(proposed, max(0.0, ahead - safe_gap))
+                proposed = min(
+                    proposed,
+                    max(0.0, ahead - safe_gap)
+                )
 
             if proposed <= 0.01:
                 car.wait_seconds += dt
@@ -167,18 +201,41 @@ class TrafficSimulation:
                 continue
 
             car.move(proposed / self.vehicle_speed)
-            if car.x < -60 or car.x > self.width + 60 or car.y < -60 or car.y > self.height + 60:
+
+            if (
+                car.x < -60
+                or car.x > self.width + 60
+                or car.y < -60
+                or car.y > self.height + 60
+            ):
                 self.metrics.completed += 1
                 self.metrics.total_wait_seconds += car.wait_seconds
                 self.vehicles.remove(car)
 
     def queue_length(self) -> int:
-        count = 0
+        """
+        Calculate the total number of vehicles waiting at the intersection.
+
+        A vehicle is counted when it is within the queue detection range
+        of its stop line and its signal is not green. The count is
+        recalculated whenever this method is called.
+        """
+        queue_count = 0
+
         for car in self.vehicles:
-            if self._distance_to_stop(car) >= -self.vehicle_length and self._distance_to_stop(car) < 210:
-                if self.signals.state_for(car.direction) != "GREEN":
-                    count += 1
-        return count
+            distance = self._distance_to_stop(car)
+
+            is_within_queue_range = (
+                -self.vehicle_length <= distance < 210
+            )
+            is_waiting_for_signal = (
+                self.signals.state_for(car.direction) != "GREEN"
+            )
+
+            if is_within_queue_range and is_waiting_for_signal:
+                queue_count += 1
+
+        return queue_count
 
     def traffic_density(self, segment_length_m=500.0) -> dict:
         """
@@ -188,7 +245,6 @@ class TrafficSimulation:
 
         Returns density in vehicles per kilometre.
         """
-
         if segment_length_m <= 0:
             raise ValueError("Segment length must be greater than zero.")
 
