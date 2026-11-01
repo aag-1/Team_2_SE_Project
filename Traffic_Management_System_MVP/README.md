@@ -59,9 +59,17 @@ python main.py
 
 - **Space** — pause / resume
 - **N** — advance one simulation step while paused
-- **R** — reset the simulation
-- **Up / Down** — increase / decrease vehicle spawn rate
+- **R** — reset the simulation (vehicles, KPIs, signal phase; spawn rate kept)
+- **Up / Down** — increase / decrease vehicle spawn rate (TMS-F-003, clamped 0.25–5.0 s)
+- **I** — trigger / clear traffic incident, blocked N/S demo (TMS-F-014, admin only)
+- **L** — export event log to `event_log.jsonl` (TMS-F-020)
+- **O** — demo admin login / logout (TMS-SR-001)
+- **1 / 2** — switch role operator / analyst (TMS-SR-002; admin needs login)
 - **Esc** — quit
+
+Congestion banner shows CONGESTED when queue/wait/active thresholds in
+`data/scenarios.json` are exceeded (TMS-F-010). Dashboard KPIs refresh live
+(TMS-F-016, TMS-NF-005).
 
 ## Project structure
 

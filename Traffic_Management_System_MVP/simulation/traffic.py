@@ -62,6 +62,7 @@ class TrafficSimulation:
         self.vehicles.clear()
         self.spawn_elapsed = 0.0
         self.running_time = 0.0
+        self.spawn_count = 0
         self.metrics.spawned = 0
         self.metrics.completed = 0
         self.metrics.total_wait_seconds = 0.0
