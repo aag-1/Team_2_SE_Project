@@ -112,8 +112,23 @@ def run_app():
         draw_text(f"Throughput: {metrics.completed}", 32, 109)
         draw_text(f"Queue length: {sim.queue_length()}", 32, 136)
         draw_text(f"Average wait: {metrics.average_wait_seconds:.1f} s", 32, 163)
+
+        density = sim.traffic_density()
+
+        draw_text("TRAFFIC DENSITY (vehicles/km)", 32, 190, selected_font=small)
+
+        draw_text(
+            f"N: {density['N']:.1f}   S: {density['S']:.1f}",
+            32, 211, selected_font=small
+        )
+
+        draw_text(
+            f"E: {density['E']:.1f}   W: {density['W']:.1f}",
+            32, 233, selected_font=small
+        )
+
         # Event log panel
-        pygame.draw.rect(screen, COLORS["panel"], (width-330, 16, 312, 174), border_radius=10)
+        pygame.draw.rect(screen, COLORS["panel"], (panel_x, 16, 370, 255), border_radius=10)
         draw_text("EVENT LOG", width-312, 28, selected_font=small)
         for i, entry in enumerate(events[:6]):
             draw_text(entry, width-312, 53+i*21, COLORS["muted"], small)

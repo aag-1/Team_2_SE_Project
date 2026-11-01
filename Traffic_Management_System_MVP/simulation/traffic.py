@@ -179,3 +179,32 @@ class TrafficSimulation:
                 if self.signals.state_for(car.direction) != "GREEN":
                     count += 1
         return count
+
+    def traffic_density(self, segment_length_m=500.0) -> dict:
+        """
+        Calculate traffic density for each road approach.
+
+        Density = number of vehicles / road length in kilometres.
+
+        Returns density in vehicles per kilometre.
+        """
+
+        if segment_length_m <= 0:
+            raise ValueError("Segment length must be greater than zero.")
+
+        segment_length_km = segment_length_m / 1000.0
+
+        vehicle_counts = {
+            direction: 0 for direction in DIRECTIONS
+        }
+
+        for car in self.vehicles:
+            distance = self._distance_to_stop(car)
+
+            if 0 <= distance <= segment_length_m:
+                vehicle_counts[car.direction] += 1
+
+        return {
+            direction: count / segment_length_km
+            for direction, count in vehicle_counts.items()
+        }
