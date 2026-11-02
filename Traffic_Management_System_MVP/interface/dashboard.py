@@ -1,13 +1,11 @@
 
 """Pygame dashboard and application loop."""
-import json
 from pathlib import Path
 from datetime import datetime
 import pygame
 
-from simulation.signals import SignalController
-from simulation.metrics import Metrics
-from simulation.traffic import TrafficSimulation
+from simulation.engine import SimulationEngine
+from simulation.scenario import Scenario, load_scenario
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 CONFIG_PATH = BASE_DIR / "data" / "scenarios.json"
@@ -27,64 +25,31 @@ COLORS = {
 
 
 def load_config():
-    with CONFIG_PATH.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+    return load_scenario(CONFIG_PATH)
 
 
-def run_app():
-    config = load_config()
+def run_app(scenario: Scenario | None = None):
+    scenario = scenario or load_config()
     pygame.init()
-    width = config["window"]["width"]
-    height = config["window"]["height"]
+    width = scenario.window["width"]
+    height = scenario.window["height"]
     screen = pygame.display.set_mode((width, height))
-    pygame.display.set_caption(config["window"]["title"])
+    pygame.display.set_caption(scenario.window["title"])
     clock = pygame.time.Clock()
     font = pygame.font.SysFont("arial", 19)
     small = pygame.font.SysFont("arial", 15)
     large = pygame.font.SysFont("arial", 26, bold=True)
 
-    sim_cfg = config["simulation"]
-
-    signals = SignalController(
-        green_seconds=sim_cfg["green_seconds"],
-        amber_seconds=sim_cfg["amber_seconds"],
-        red_clearance_seconds=sim_cfg["red_clearance_seconds"],
-        phase_sequence=tuple(
-            sim_cfg.get(
-                "phase_sequence",
-                [
-                    "NS_GREEN",
-                    "NS_AMBER",
-                    "ALL_RED_TO_EW",
-                    "EW_GREEN",
-                    "EW_AMBER",
-                    "ALL_RED_TO_NS"
-                ]
-            )
-        )
-    )
-
-    metrics = Metrics()
-
-    sim = TrafficSimulation(
-        width,
-        height,
-        signals,
-        metrics,
-        sim_cfg["vehicle_speed"],
-        sim_cfg["vehicle_length"],
-        sim_cfg["vehicle_gap"],
-        sim_cfg["spawn_interval_seconds"]
-    )
-
-    paused = False
-    spawn_interval = sim.spawn_interval
-    events = ["Simulation ready"]
+    engine = SimulationEngine(scenario)
+    sim, signals, metrics = engine.traffic, engine.signals, engine.metrics
+    events = [f"Scenario loaded: {scenario.name}"]
 
     def log(message):
         stamp = datetime.now().strftime("%H:%M:%S")
         events.insert(0, f"{stamp}  {message}")
         del events[8:]
+
+    engine.add_listener(lambda _type, message, _ctx: log(message))
 
     def draw_text(text, x, y, color=None, selected_font=None):
         screen.blit(
@@ -336,10 +301,9 @@ def run_app():
             32, height-62
         )
 
-        status = "PAUSED" if paused else "RUNNING"
-
         draw_text(
-            f"{status}   |   Spawn interval: {spawn_interval:.2f}s",
+            f"{engine.state}   |   Spawn interval: {sim.spawn_interval:.2f}s"
+            f"   |   t = {engine.clock:.1f}s",
             32, height-35,
             COLORS["muted"],
             small
@@ -366,50 +330,23 @@ def run_app():
                     running = False
 
                 elif event.key == pygame.K_SPACE:
-                    paused = not paused
-                    log(
-                        "Simulation paused"
-                        if paused else "Simulation resumed"
-                    )
+                    engine.toggle_pause()
 
-                elif event.key == pygame.K_n and paused:
-                    sim.update(1 / 30)
-                    transition = signals.update(1 / 30)
-
-                    if transition:
-                        log(f"Signal changed to {transition}")
+                elif event.key == pygame.K_n:
+                    engine.step()
 
                 elif event.key == pygame.K_r:
-                    sim.reset()
-                    log("Simulation reset")
+                    engine.reset()
 
                 elif event.key == pygame.K_UP:
-                    spawn_interval = max(
-                        0.25,
-                        spawn_interval - 0.15
-                    )
-                    sim.spawn_interval = spawn_interval
-                    log(
-                        f"Traffic rate increased ({spawn_interval:.2f}s interval)"
-                    )
+                    value = engine.set_spawn_interval(sim.spawn_interval - 0.15)
+                    log(f"Traffic rate increased ({value:.2f}s interval)")
 
                 elif event.key == pygame.K_DOWN:
-                    spawn_interval = min(
-                        5.0,
-                        spawn_interval + 0.15
-                    )
-                    sim.spawn_interval = spawn_interval
-                    log(
-                        f"Traffic rate decreased ({spawn_interval:.2f}s interval)"
-                    )
+                    value = engine.set_spawn_interval(sim.spawn_interval + 0.15)
+                    log(f"Traffic rate decreased ({value:.2f}s interval)")
 
-        if not paused:
-            transition = signals.update(dt)
-
-            if transition:
-                log(f"Signal changed to {transition}")
-
-            sim.update(dt)
+        engine.tick(dt)
 
         draw_road()
         draw_vehicles()

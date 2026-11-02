@@ -1,4 +1,6 @@
 {
+  "schema_version": 1,
+  "name": "Default four-way intersection",
   "window": {
     "width": 1100,
     "height": 760,
@@ -20,6 +22,37 @@
       "EW_GREEN",
       "EW_AMBER",
       "ALL_RED_TO_NS"
+    ],
+    "seed": 7
+  },
+  "network": {
+    "intersections": [
+      {
+        "id": "INT-1",
+        "type": "four_way"
+      }
+    ],
+    "roads": [
+      {
+        "id": "R-N",
+        "intersection": "INT-1",
+        "approach": "N"
+      },
+      {
+        "id": "R-S",
+        "intersection": "INT-1",
+        "approach": "S"
+      },
+      {
+        "id": "R-E",
+        "intersection": "INT-1",
+        "approach": "E"
+      },
+      {
+        "id": "R-W",
+        "intersection": "INT-1",
+        "approach": "W"
+      }
     ]
   }
 }
