@@ -13,7 +13,9 @@ Software Engineering mini-project.
 - Start/pause, reset, and manual single-step controls.
 - Live vehicle count, queue length, throughput, and average waiting time.
 - Timestamped event log.
-- Scenario settings loaded from `data/scenarios.json`.
+- Scenario settings loaded from `data/scenarios.json`, including the road network
+  (one four-way intersection, configurable N/S/E/W approach roads).
+- Create new scenarios from the command line and run them with `--scenario`.
 
 This is a working **MVP foundation**, not a claim that all 20 functional, 8
 non-functional, and 6 security requirements in the submitted SRS are complete.
@@ -59,9 +61,20 @@ python main.py
 
 - **Space** — pause / resume
 - **N** — advance one simulation step while paused
-- **R** — reset the simulation
+- **R** — reset the simulation (same scenario, same arrival sequence)
 - **Up / Down** — increase / decrease vehicle spawn rate
 - **Esc** — quit
+
+## Scenarios
+
+```bash
+python -m tools.scenario_cli create --name "Rush hour" --approaches N,S,E \
+    --spawn-interval 0.6 --green 15 --out data/scenarios/rush_hour.json
+python main.py --scenario data/scenarios/rush_hour.json
+```
+
+The current model supports one four-way intersection; scenarios with more than
+one intersection are rejected with an explicit message.
 
 ## Project structure
 
@@ -74,15 +87,17 @@ Traffic_Management_System_MVP/
 │   └── scenarios.json
 ├── simulation/
 │   ├── __init__.py
+│   ├── engine.py      # master clock + pause/resume/step/reset
+│   ├── scenario.py    # scenario model: roads + intersection
 │   ├── signals.py
 │   ├── traffic.py
 │   └── metrics.py
 ├── interface/
 │   ├── __init__.py
 │   └── dashboard.py
-└── tests/
-    ├── test_signals.py
-    └── test_metrics.py
+├── tools/
+│   └── scenario_cli.py   # create scenario files
+└── tests/                # python -m pytest -q
 ```
 
 ## Notes for the team
@@ -93,7 +108,9 @@ Traffic_Management_System_MVP/
    differs from the SRS mapping; document this in a new note rather than editing
    submitted documents.
 4. Create a feature branch per member and raise PRs for repository-owner review.
-5. Run `pytest -q` after installing requirements.
+5. Run `python -m pytest -q` from the `Traffic_Management_System_MVP` folder after
+   installing requirements. On macOS, pygame 2.6.1 fonts fail on Python 3.14; use a
+   Python 3.12 virtual environment to run the window.
 
 ## Current MVP boundaries
 

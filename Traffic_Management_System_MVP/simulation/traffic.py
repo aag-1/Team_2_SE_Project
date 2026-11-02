@@ -16,6 +16,7 @@ class Vehicle:
     width: float = 18.0
     wait_seconds: float = 0.0
     color: tuple = (50, 130, 220)
+    road_id: str = ""
 
     def move(self, dt: float) -> None:
         distance = self.speed * dt
@@ -32,7 +33,14 @@ class Vehicle:
 class TrafficSimulation:
     def __init__(self, width: int, height: int, signals, metrics,
                  vehicle_speed=145.0, vehicle_length=30.0, vehicle_gap=13.0,
-                 spawn_interval=1.25, seed=7):
+                 spawn_interval=1.25, seed=7, approaches=DIRECTIONS, road_ids=None):
+        approaches = tuple(approaches)
+        if not approaches or any(a not in DIRECTIONS for a in approaches) \
+                or len(set(approaches)) != len(approaches):
+            raise ValueError(f"approaches must be distinct values from {DIRECTIONS}")
+        self.approaches = approaches
+        self.road_ids = dict(road_ids or {a: f"R-{a}" for a in approaches})
+        self.seed = seed
         self.width, self.height = width, height
         self.cx, self.cy = width / 2, height / 2
         self.road_half = 72
@@ -58,6 +66,7 @@ class TrafficSimulation:
         self.metrics.elapsed_seconds = 0.0
         self.signals.elapsed = 0.0
         self.signals.phase = "NS_GREEN"
+        self.rng.seed(self.seed)  # reset reproduces the same arrival sequence
 
     def _spawn_position(self, direction):
         if direction == "N":
@@ -87,7 +96,7 @@ class TrafficSimulation:
         return True
 
     def _spawn(self):
-        directions = list(DIRECTIONS)
+        directions = list(self.approaches)
         self.rng.shuffle(directions)
 
         for direction in directions:
@@ -108,7 +117,8 @@ class TrafficSimulation:
                         y,
                         self.vehicle_speed,
                         self.vehicle_length,
-                        color=color
+                        color=color,
+                        road_id=self.road_ids.get(direction, "")
                     )
                 )
                 self.metrics.spawned += 1
@@ -162,6 +172,14 @@ class TrafficSimulation:
             and self.cy - self.road_half - car.length <= car.y <= self.cy + self.road_half + car.length
         )
 
+    def _has_passed_stop_line(self, car):
+        """True once the vehicle's front is beyond its stop line (committed to cross).
+
+        The _is_in_intersection box starts 8px before the stop line, which let
+        vehicles stopped in that gap drive through on red; movement uses this instead.
+        """
+        return self._distance_to_stop(car) < -0.01
+
     def update(self, dt: float):
         self.running_time += dt
         self.metrics.elapsed_seconds += dt
@@ -174,7 +192,7 @@ class TrafficSimulation:
         for car in list(self.vehicles):
             signal = self.signals.state_for(car.direction)
             distance = self._distance_to_stop(car)
-            can_enter = signal == "GREEN" or self._is_in_intersection(car)
+            can_enter = signal == "GREEN" or self._has_passed_stop_line(car)
             proposed = self.vehicle_speed * dt
 
             if not can_enter and distance >= 0 and proposed >= distance:
@@ -195,7 +213,7 @@ class TrafficSimulation:
                 continue
 
             # A vehicle may approach the stop line but cannot cross it on amber/red.
-            if signal != "GREEN" and not self._is_in_intersection(car) and distance <= proposed + 0.01:
+            if signal != "GREEN" and not self._has_passed_stop_line(car) and distance <= proposed + 0.01:
                 car.wait_seconds += dt
                 self.metrics.record_wait(dt)
                 continue
