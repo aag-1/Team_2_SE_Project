@@ -19,6 +19,7 @@ class Vehicle:
     color: tuple = (50, 130, 220)
     road_id: str = ""
     is_emergency: bool = False
+    travel_seconds: float = 0.0
 
     def move(self, dt: float) -> None:
         distance = self.speed * dt
@@ -106,6 +107,7 @@ class TrafficSimulation:
         self.metrics.spawned = 0
         self.metrics.completed = 0
         self.metrics.total_wait_seconds = 0.0
+        self.metrics.total_travel_seconds = 0.0
         self.metrics.waiting_vehicle_seconds = 0.0
         self.metrics.elapsed_seconds = 0.0
 
@@ -339,6 +341,7 @@ class TrafficSimulation:
             previous_car = None
 
             for car in cars:
+                car.travel_seconds += dt
                 signal = self.signals.state_for(car.direction)
                 distance = self._distance_to_stop(car)
 
@@ -406,6 +409,7 @@ class TrafficSimulation:
                 ):
                     self.metrics.completed += 1
                     self.metrics.total_wait_seconds += car.wait_seconds
+                    self.metrics.total_travel_seconds += car.travel_seconds
                     continue
 
                 survivors.append(car)
