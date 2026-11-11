@@ -304,6 +304,7 @@ class TrafficSimulation:
             # Resume normal/adaptive signal operation.
             self.signals.cancel_priority()
 
+
     def update(self, dt: float):
         self.running_time += dt
         self.metrics.elapsed_seconds += dt
@@ -316,55 +317,102 @@ class TrafficSimulation:
         # Check for approaching emergency vehicles.
         self._update_emergency_priority()
 
-        for car in list(self.vehicles):
-            signal = self.signals.state_for(car.direction)
-            distance = self._distance_to_stop(car)
+        # Group vehicles by direction and sort front-to-back.
+        vehicles_by_direction = {
+            direction: [] for direction in DIRECTIONS
+        }
 
-            can_enter = (
-                signal == "GREEN"
-                or self._has_passed_stop_line(car)
-            )
+        for car in self.vehicles:
+            vehicles_by_direction[car.direction].append(car)
 
-            proposed = self.vehicle_speed * dt
+        sort_keys = {
+            "N": lambda car: -car.y,
+            "S": lambda car: car.y,
+            "W": lambda car: -car.x,
+            "E": lambda car: car.x,
+        }
 
-            if not can_enter and distance >= 0 and proposed >= distance:
-                proposed = max(0.0, distance)
+        survivors = []
 
-            ahead = self._car_ahead_gap(car)
-            safe_gap = self.vehicle_gap
+        for direction, cars in vehicles_by_direction.items():
+            cars.sort(key=sort_keys[direction])
+            previous_car = None
 
-            if ahead < self.vehicle_length + safe_gap:
-                proposed = min(
-                    proposed,
-                    max(0.0, ahead - safe_gap)
+            for car in cars:
+                signal = self.signals.state_for(car.direction)
+                distance = self._distance_to_stop(car)
+
+                can_enter = (
+                    signal == "GREEN"
+                    or self._has_passed_stop_line(car)
                 )
 
-            if proposed <= 0.01:
-                car.wait_seconds += dt
-                self.metrics.record_wait(dt)
-                continue
+                proposed = self.vehicle_speed * dt
 
-            # Vehicles cannot cross the stop line on amber or red.
-            if (
-                signal != "GREEN"
-                and not self._has_passed_stop_line(car)
-                and distance <= proposed + 0.01
-            ):
-                car.wait_seconds += dt
-                self.metrics.record_wait(dt)
-                continue
+                if not can_enter and distance >= 0 and proposed >= distance:
+                    proposed = max(0.0, distance)
 
-            car.move(proposed / self.vehicle_speed)
+                # Check only the nearest surviving vehicle ahead.
+                if previous_car is not None:
+                    if direction == "N":
+                        ahead = (
+                            previous_car.y - car.y - car.length
+                        )
+                    elif direction == "S":
+                        ahead = (
+                            car.y - previous_car.y - car.length
+                        )
+                    elif direction == "W":
+                        ahead = (
+                            previous_car.x - car.x - car.length
+                        )
+                    else:
+                        ahead = (
+                            car.x - previous_car.x - car.length
+                        )
 
-            if (
-                car.x < -60
-                or car.x > self.width + 60
-                or car.y < -60
-                or car.y > self.height + 60
-            ):
-                self.metrics.completed += 1
-                self.metrics.total_wait_seconds += car.wait_seconds
-                self.vehicles.remove(car)
+                    if ahead < self.vehicle_length + self.vehicle_gap:
+                        proposed = min(
+                            proposed,
+                            max(0.0, ahead - self.vehicle_gap)
+                        )
+
+                if proposed <= 0.01:
+                    car.wait_seconds += dt
+                    self.metrics.record_wait(dt)
+                    survivors.append(car)
+                    previous_car = car
+                    continue
+
+                # Vehicles cannot cross the stop line on amber or red.
+                if (
+                    signal != "GREEN"
+                    and not self._has_passed_stop_line(car)
+                    and distance <= proposed + 0.01
+                ):
+                    car.wait_seconds += dt
+                    self.metrics.record_wait(dt)
+                    survivors.append(car)
+                    previous_car = car
+                    continue
+
+                car.move(proposed / self.vehicle_speed)
+
+                if (
+                    car.x < -60
+                    or car.x > self.width + 60
+                    or car.y < -60
+                    or car.y > self.height + 60
+                ):
+                    self.metrics.completed += 1
+                    self.metrics.total_wait_seconds += car.wait_seconds
+                    continue
+
+                survivors.append(car)
+                previous_car = car
+
+        # Replace the vehicle list once instead of removing cars individually.
+        self.vehicles = survivors
 
     def queue_length(self) -> int:
         """
