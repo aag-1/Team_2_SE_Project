@@ -7,6 +7,7 @@ class Metrics:
     spawned: int = 0
     completed: int = 0
     total_wait_seconds: float = 0.0
+    total_travel_seconds: float = 0.0
     waiting_vehicle_seconds: float = 0.0
     elapsed_seconds: float = 0.0
 
@@ -25,6 +26,16 @@ class Metrics:
         if self.completed <= 0:
             return 0.0
         return self.total_wait_seconds / self.completed
+
+    @property
+    def average_delay_seconds(self) -> float:
+        return self.average_wait_seconds
+
+    @property
+    def average_travel_time_seconds(self) -> float:
+        if self.completed <= 0:
+            return 0.0
+        return self.total_travel_seconds / self.completed
 
     def record_wait(self, dt: float) -> None:
         self.waiting_vehicle_seconds += dt
