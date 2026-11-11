@@ -1,3 +1,4 @@
+
 {
   "schema_version": 1,
   "name": "Default four-way intersection",
@@ -15,6 +16,9 @@
     "green_seconds": 12,
     "amber_seconds": 3,
     "red_clearance_seconds": 1,
+    "adaptive_control": true,
+    "min_green_seconds": 6,
+    "max_green_seconds": 30,
     "phase_sequence": [
       "NS_GREEN",
       "NS_AMBER",
