@@ -36,6 +36,7 @@ def run_app(scenario: Scenario | None = None):
     screen = pygame.display.set_mode((width, height))
     pygame.display.set_caption(scenario.window["title"])
     clock = pygame.time.Clock()
+    fps = 0.0
     font = pygame.font.SysFont("arial", 19)
     small = pygame.font.SysFont("arial", 15)
     large = pygame.font.SysFont("arial", 26, bold=True)
@@ -210,7 +211,7 @@ def run_app(scenario: Scenario | None = None):
         pygame.draw.rect(
             screen,
             COLORS["panel"],
-            (panel_x, 16, 330, 174),
+            (panel_x, 16, 370, 255),
             border_radius=10
         )
 
@@ -244,6 +245,11 @@ def run_app(scenario: Scenario | None = None):
             f"Average wait: {metrics.average_wait_seconds:.1f} s",
             32, 163
         )
+        draw_text(
+            f"Visual update rate: {fps:.1f} FPS",
+            32, 250,
+            selected_font=small
+    )
 
         density = sim.traffic_density()
 
@@ -265,12 +271,7 @@ def run_app(scenario: Scenario | None = None):
             selected_font=small
         )
 
-        pygame.draw.rect(
-            screen,
-            COLORS["panel"],
-            (panel_x, 16, 370, 255),
-            border_radius=10
-        )
+
 
         draw_text(
             "EVENT LOG",
@@ -320,6 +321,7 @@ def run_app(scenario: Scenario | None = None):
 
     while running:
         dt = min(clock.tick(60) / 1000.0, 0.05)
+        fps = clock.get_fps()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
