@@ -6,9 +6,11 @@ import pygame
 
 from simulation.engine import SimulationEngine
 from simulation.scenario import Scenario, load_scenario
+from simulation.report import save_summary_report
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 CONFIG_PATH = BASE_DIR / "data" / "scenarios.json"
+REPORT_DIR = BASE_DIR / "reports"
 
 COLORS = {
     "background": (238, 241, 244),
@@ -39,7 +41,6 @@ def run_app(scenario: Scenario | None = None):
     fps = 0.0
     font = pygame.font.SysFont("arial", 19)
     small = pygame.font.SysFont("arial", 15)
-    large = pygame.font.SysFont("arial", 26, bold=True)
 
     engine = SimulationEngine(scenario)
     sim, signals, metrics = engine.traffic, engine.signals, engine.metrics
@@ -64,79 +65,54 @@ def run_app(scenario: Scenario | None = None):
 
     def draw_road():
         cx, cy, half = sim.cx, sim.cy, sim.road_half
-
         screen.fill(COLORS["background"])
 
         pygame.draw.rect(
-            screen,
-            COLORS["road"],
-            (cx-half, 0, half*2, height)
+            screen, COLORS["road"], (cx-half, 0, half*2, height)
         )
-
         pygame.draw.rect(
-            screen,
-            COLORS["road"],
-            (0, cy-half, width, half*2)
+            screen, COLORS["road"], (0, cy-half, width, half*2)
         )
 
         for y in range(0, int(cy-half), 34):
             pygame.draw.line(
-                screen,
-                COLORS["road_line"],
-                (cx, y),
-                (cx, min(y+18, cy-half)),
-                2
+                screen, COLORS["road_line"],
+                (cx, y), (cx, min(y+18, cy-half)), 2
             )
 
         for y in range(int(cy+half), height, 34):
             pygame.draw.line(
-                screen,
-                COLORS["road_line"],
-                (cx, y),
-                (cx, min(y+18, height)),
-                2
+                screen, COLORS["road_line"],
+                (cx, y), (cx, min(y+18, height)), 2
             )
 
         for x in range(0, int(cx-half), 34):
             pygame.draw.line(
-                screen,
-                COLORS["road_line"],
-                (x, cy),
-                (min(x+18, cx-half), cy),
-                2
+                screen, COLORS["road_line"],
+                (x, cy), (min(x+18, cx-half), cy), 2
             )
 
         for x in range(int(cx+half), width, 34):
             pygame.draw.line(
-                screen,
-                COLORS["road_line"],
-                (x, cy),
-                (min(x+18, width), cy),
-                2
+                screen, COLORS["road_line"],
+                (x, cy), (min(x+18, width), cy), 2
             )
 
         pygame.draw.line(
             screen, COLORS["white"],
-            (cx-half, cy-half-8),
-            (cx+half, cy-half-8), 4
+            (cx-half, cy-half-8), (cx+half, cy-half-8), 4
         )
-
         pygame.draw.line(
             screen, COLORS["white"],
-            (cx-half, cy+half+8),
-            (cx+half, cy+half+8), 4
+            (cx-half, cy+half+8), (cx+half, cy+half+8), 4
         )
-
         pygame.draw.line(
             screen, COLORS["white"],
-            (cx-half-8, cy-half),
-            (cx-half-8, cy+half), 4
+            (cx-half-8, cy-half), (cx-half-8, cy+half), 4
         )
-
         pygame.draw.line(
             screen, COLORS["white"],
-            (cx+half+8, cy-half),
-            (cx+half+8, cy+half), 4
+            (cx+half+8, cy-half), (cx+half+8, cy+half), 4
         )
 
     def draw_signals():
@@ -150,28 +126,12 @@ def run_app(scenario: Scenario | None = None):
         for direction, (x, y) in positions.items():
             state = signals.state_for(direction)
             color = COLORS[state.lower()]
-
             pygame.draw.rect(
-                screen,
-                (25, 27, 30),
-                (x, y, 26, 26),
+                screen, (25, 27, 30), (x, y, 26, 26),
                 border_radius=5
             )
-
-            pygame.draw.circle(
-                screen,
-                color,
-                (x+13, y+13),
-                8
-            )
-
-            draw_text(
-                direction,
-                x+5,
-                y-20,
-                COLORS["white"],
-                small
-            )
+            pygame.draw.circle(screen, color, (x+13, y+13), 8)
+            draw_text(direction, x+5, y-20, COLORS["white"], small)
 
     def draw_vehicles():
         for car in sim.vehicles:
@@ -191,130 +151,72 @@ def run_app(scenario: Scenario | None = None):
                 )
 
             pygame.draw.rect(
-                screen,
-                car.color,
-                rect,
-                border_radius=5
+                screen, car.color, rect, border_radius=5
             )
-
             pygame.draw.rect(
-                screen,
-                (25, 30, 35),
-                rect,
-                1,
-                border_radius=5
+                screen, (25, 30, 35), rect, 1, border_radius=5
             )
 
     def draw_panel():
         panel_x = 18
-
         pygame.draw.rect(
-            screen,
-            COLORS["panel"],
-            (panel_x, 16, 370, 255),
+            screen, COLORS["panel"], (panel_x, 16, 370, 280),
             border_radius=10
         )
 
         draw_text(
             "TRAFFIC MANAGEMENT SIMULATOR",
-            32, 28,
-            selected_font=small
+            32, 28, selected_font=small
         )
-
-        draw_text(
-            f"Vehicles active: {len(sim.vehicles)}",
-            32, 55
-        )
-
-        draw_text(
-            f"Vehicles generated: {metrics.spawned}",
-            32, 82
-        )
-
+        draw_text(f"Vehicles active: {len(sim.vehicles)}", 32, 55)
+        draw_text(f"Vehicles generated: {metrics.spawned}", 32, 82)
         draw_text(
             f"Throughput: {metrics.throughput_per_minute:.2f} vehicles/min",
             32, 109
         )
-
-        draw_text(
-            f"Queue length: {sim.queue_length()}",
-            32, 136
-        )
-
+        draw_text(f"Queue length: {sim.queue_length()}", 32, 136)
         draw_text(
             f"Average wait: {metrics.average_wait_seconds:.1f} s",
             32, 163
         )
-        draw_text(
-            f"Visual update rate: {fps:.1f} FPS",
-            32, 250,
-            selected_font=small
-    )
 
         density = sim.traffic_density()
-
-        draw_text(
-            "TRAFFIC DENSITY (vehicles/km)",
-            32, 190,
-            selected_font=small
-        )
-
+        draw_text("TRAFFIC DENSITY (vehicles/km)", 32, 190, selected_font=small)
         draw_text(
             f"N: {density['N']:.1f}   S: {density['S']:.1f}",
-            32, 211,
-            selected_font=small
+            32, 211, selected_font=small
         )
-
         draw_text(
             f"E: {density['E']:.1f}   W: {density['W']:.1f}",
-            32, 233,
-            selected_font=small
+            32, 233, selected_font=small
         )
-
-
-
         draw_text(
-            "EVENT LOG",
-            width-312, 28,
-            selected_font=small
+            f"Visual update rate: {fps:.1f} FPS",
+            32, 260, selected_font=small
         )
+
+        draw_text("EVENT LOG", width-312, 28, selected_font=small)
 
         for i, entry in enumerate(events[:6]):
             draw_text(
-                entry,
-                width-312,
-                53+i*21,
-                COLORS["muted"],
-                small
+                entry, width-312, 53+i*21,
+                COLORS["muted"], small
             )
 
         phase = signals.phase.replace("_", " ")
-
         pygame.draw.rect(
-            screen,
-            COLORS["panel"],
-            (18, height-72, 550, 54),
-            border_radius=9
+            screen, COLORS["panel"],
+            (18, height-72, 550, 54), border_radius=9
         )
-
-        draw_text(
-            f"Signal phase: {phase}",
-            32, height-62
-        )
-
+        draw_text(f"Signal phase: {phase}", 32, height-62)
         draw_text(
             f"{engine.state}   |   Spawn interval: {sim.spawn_interval:.2f}s"
             f"   |   t = {engine.clock:.1f}s",
-            32, height-35,
-            COLORS["muted"],
-            small
+            32, height-35, COLORS["muted"], small
         )
-
         draw_text(
-            "SPACE: pause   N: step   R: reset   UP/DOWN: traffic rate   ESC: quit",
-            width-600, height-48,
-            COLORS["text"],
-            small
+            "SPACE: pause   N: step   R: reset   P: report   UP/DOWN: traffic rate   ESC: quit",
+            width-700, height-48, COLORS["text"], small
         )
 
     running = True
@@ -340,6 +242,13 @@ def run_app(scenario: Scenario | None = None):
                 elif event.key == pygame.K_r:
                     engine.reset()
 
+                elif event.key == pygame.K_p:
+                    try:
+                        report_path = save_summary_report(engine, REPORT_DIR)
+                        log(f"Summary report saved: {report_path.name}")
+                    except (OSError, ValueError) as exc:
+                        log(f"Report generation failed: {exc}")
+
                 elif event.key == pygame.K_UP:
                     value = engine.set_spawn_interval(sim.spawn_interval - 0.15)
                     log(f"Traffic rate increased ({value:.2f}s interval)")
@@ -349,12 +258,10 @@ def run_app(scenario: Scenario | None = None):
                     log(f"Traffic rate decreased ({value:.2f}s interval)")
 
         engine.tick(dt)
-
         draw_road()
         draw_vehicles()
         draw_signals()
         draw_panel()
-
         pygame.display.flip()
 
     pygame.quit()
