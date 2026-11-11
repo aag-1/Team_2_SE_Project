@@ -4,6 +4,7 @@
 Requirements covered:
   TMS-F-015  pause, resume, step and reset
   TMS-F-004  drives vehicle movement (via TrafficSimulation) under signal control
+  TMS-F-013  prioritizes simulated emergency vehicles
 
 Per the SAD, the engine advances discrete ticks and is independent of the
 Dashboard UI. Interested components (dashboard, event logger) subscribe with
@@ -39,7 +40,6 @@ class SimulationEngine:
         cfg = scenario.simulation
 
         # Create the signal controller with optional adaptive settings.
-        # Adaptive control remains disabled unless enabled in the scenario.
         self.signals = SignalController(
             cfg["green_seconds"],
             cfg["amber_seconds"],
@@ -54,6 +54,7 @@ class SimulationEngine:
 
         self.metrics = Metrics()
 
+        # Create traffic simulation with emergency vehicle support.
         self.traffic = TrafficSimulation(
             scenario.window["width"],
             scenario.window["height"],
@@ -66,6 +67,12 @@ class SimulationEngine:
             seed=cfg.get("seed", 7),
             approaches=scenario.approaches,
             road_ids=scenario.road_ids,
+            emergency_spawn_probability=cfg.get(
+                "emergency_spawn_probability", 0.03
+            ),
+            emergency_priority_distance=cfg.get(
+                "emergency_priority_distance", 210.0
+            ),
         )
 
         self.state = PAUSED if start_paused else RUNNING
@@ -112,7 +119,7 @@ class SimulationEngine:
                 phase=transition,
             )
 
-        # Update vehicle movement after the signal update.
+        # Update vehicle movement and detect approaching emergency vehicles.
         self.traffic.update(dt)
 
         self.clock += dt
@@ -158,6 +165,7 @@ class SimulationEngine:
         """Return to the scenario's initial state; run/pause state is kept."""
         self.signals.reset()
         self.traffic.reset()
+
         self.traffic.spawn_interval = (
             self.scenario.simulation["spawn_interval_seconds"]
         )

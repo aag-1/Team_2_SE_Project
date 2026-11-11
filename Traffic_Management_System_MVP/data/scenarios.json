@@ -8,6 +8,8 @@
     "title": "Traffic Management System — Simulation"
   },
   "simulation": {
+    "emergency_spawn_probability": 0.0,
+    "emergency_priority_distance": 210,
     "tick_rate": 60,
     "spawn_interval_seconds": 1.25,
     "vehicle_speed": 145,
