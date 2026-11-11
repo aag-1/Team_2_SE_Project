@@ -255,6 +255,27 @@ class TrafficSimulation:
 
         return queue_count
 
+    def queue_lengths_by_direction(self) -> dict:
+        """
+        Return queued vehicle counts for each configured approach.
+
+        A vehicle is counted when it is within the queue detection range
+        of its stop line. Unlike queue_length(), this method reports each
+        approach separately so adaptive signal control can compare demand.
+        """
+        queues = {direction: 0 for direction in self.approaches}
+
+        for car in self.vehicles:
+            distance = self._distance_to_stop(car)
+            is_within_queue_range = (
+                -self.vehicle_length <= distance < 210
+            )
+
+            if is_within_queue_range:
+                queues[car.direction] += 1
+
+        return queues
+
     def traffic_density(self, segment_length_m=500.0) -> dict:
         """
         Calculate traffic density for each road approach.

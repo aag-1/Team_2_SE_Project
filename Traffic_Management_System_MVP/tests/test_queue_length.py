@@ -92,3 +92,51 @@ def test_queue_length_excludes_vehicles_outside_detection_range():
     sim.vehicles.append(car)
 
     assert sim.queue_length() == 0
+
+
+# New tests for directional queue counting
+
+def test_directional_queue_lengths_are_zero_when_no_vehicles():
+    sim = create_simulation()
+
+    assert sim.queue_lengths_by_direction() == {
+        "N": 0,
+        "S": 0,
+        "E": 0,
+        "W": 0,
+    }
+
+
+def test_directional_queue_lengths_count_each_approach():
+    sim = create_simulation()
+
+    sim.vehicles = [
+        Vehicle("N", sim.cx - 20, 100, 145),
+        Vehicle("N", sim.cx - 20, 120, 145),
+        Vehicle("S", sim.cx + 20, 500, 145),
+        Vehicle("E", 600, sim.cy - 20, 145),
+        Vehicle("W", 200, sim.cy + 20, 145),
+    ]
+
+    assert sim.queue_lengths_by_direction() == {
+        "N": 2,
+        "S": 1,
+        "E": 1,
+        "W": 1,
+    }
+
+
+def test_directional_queue_lengths_exclude_vehicles_outside_detection_range():
+    sim = create_simulation()
+
+    sim.vehicles = [
+        Vehicle("N", sim.cx - 20, -10, 145),
+        Vehicle("S", sim.cx + 20, 500, 145),
+    ]
+
+    assert sim.queue_lengths_by_direction() == {
+        "N": 0,
+        "S": 1,
+        "E": 0,
+        "W": 0,
+    }
