@@ -211,7 +211,7 @@ def run_app(scenario: Scenario | None = None):
         pygame.draw.rect(
             screen,
             COLORS["panel"],
-            (panel_x, 16, 370, 255),
+            (panel_x, 16, 370, 280),
             border_radius=10
         )
 
@@ -242,12 +242,17 @@ def run_app(scenario: Scenario | None = None):
         )
 
         draw_text(
-            f"Average wait: {metrics.average_wait_seconds:.1f} s",
+            f"Average delay: {metrics.average_delay_seconds:.1f} s",
             32, 163
+        )
+
+        draw_text(
+            f"Average travel time: {metrics.average_travel_time_seconds:.1f} s",
+            32, 187
         )
         draw_text(
             f"Visual update rate: {fps:.1f} FPS",
-            32, 250,
+            32, 270,
             selected_font=small
     )
 
@@ -255,19 +260,19 @@ def run_app(scenario: Scenario | None = None):
 
         draw_text(
             "TRAFFIC DENSITY (vehicles/km)",
-            32, 190,
+            32, 214,
             selected_font=small
         )
 
         draw_text(
             f"N: {density['N']:.1f}   S: {density['S']:.1f}",
-            32, 211,
+            32, 235,
             selected_font=small
         )
 
         draw_text(
             f"E: {density['E']:.1f}   W: {density['W']:.1f}",
-            32, 233,
+            32, 257,
             selected_font=small
         )
 
