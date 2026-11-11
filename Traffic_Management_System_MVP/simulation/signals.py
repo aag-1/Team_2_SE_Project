@@ -1,5 +1,5 @@
 
-"""Traffic signal controller with fixed-time and adaptive modes."""
+"""Traffic signal controller with fixed-time, adaptive and emergency priority modes."""
 from dataclasses import dataclass, field
 
 
@@ -30,6 +30,9 @@ class SignalController:
     _active_green_duration: float | None = field(
         default=None, init=False, repr=False
     )
+    priority_direction: str | None = field(
+        default=None, init=False
+    )
 
     def __post_init__(self):
         if self.green_seconds <= 0:
@@ -53,6 +56,24 @@ class SignalController:
             + self.red_clearance_seconds
         )
 
+    def request_priority(self, direction: str) -> None:
+        """Request emergency priority for the specified approach."""
+        if direction not in ("N", "S", "E", "W"):
+            raise ValueError(f"Invalid priority direction: {direction!r}")
+
+        self.priority_direction = direction
+
+    def cancel_priority(self) -> None:
+        """Cancel emergency priority and resume normal signal operation."""
+        self.priority_direction = None
+
+    def _priority_group(self) -> str | None:
+        """Return NS or EW for the requested emergency direction."""
+        if self.priority_direction is None:
+            return None
+
+        return "NS" if self.priority_direction in ("N", "S") else "EW"
+
     def calculate_green_duration(self, queue_lengths: dict, directions: str) -> float:
         """Calculate green time from queue demand for NS or EW."""
         if not self.adaptive:
@@ -63,7 +84,6 @@ class SignalController:
         else:
             demand = queue_lengths.get("E", 0) + queue_lengths.get("W", 0)
 
-        # Add 1.5 seconds for each queued vehicle, within configured limits.
         duration = self.green_seconds + demand * 1.5
 
         return max(
@@ -78,7 +98,6 @@ class SignalController:
 
         queue_lengths = queue_lengths or {}
 
-        # Determine the duration when entering a green phase.
         if self.phase.endswith("_GREEN") and self._active_green_duration is None:
             directions = "NS" if self.phase == "NS_GREEN" else "EW"
             self._active_green_duration = self.calculate_green_duration(
@@ -106,8 +125,21 @@ class SignalController:
 
     def _phase_duration(self) -> float:
         if self.phase.endswith("_GREEN"):
+            requested_group = self._priority_group()
+            current_group = self.phase[:2]
+
+            # End the current green early if emergency traffic is
+            # approaching from the opposite direction.
+            # The next phases remain amber and all-red.
+            if (
+                requested_group is not None
+                and requested_group != current_group
+            ):
+                return self.elapsed
+
             if self.adaptive and self._active_green_duration is not None:
                 return self._active_green_duration
+
             return self.green_seconds
 
         if self.phase.endswith("_AMBER"):
@@ -150,3 +182,4 @@ class SignalController:
         self.elapsed = 0.0
         self.phase = self.phase_sequence[0]
         self._active_green_duration = None
+        self.priority_direction = None
