@@ -1,4 +1,3 @@
-
 """Pygame dashboard and application loop."""
 from pathlib import Path
 from datetime import datetime
@@ -184,7 +183,7 @@ def run_app(scenario: Scenario | None = None):
         pygame.draw.rect(
             screen,
             COLORS["panel"],
-            (panel_x, 16, 370, 305),
+            (panel_x, 16, 370, 325),
             border_radius=10
         )
 
@@ -230,9 +229,17 @@ def run_app(scenario: Scenario | None = None):
             32, 257, selected_font=small
         )
 
+        # TMS-NF-005: Clear status indicators & incident feedback display
+        active_incidents = getattr(engine, "incidents", [])
+        incident_status = f"Incidents Active: {len(active_incidents)}" if active_incidents else "Status: Normal Flow"
+        draw_text(
+            incident_status,
+            32, 280, COLORS["text"] if not active_incidents else COLORS["amber"], small
+        )
+
         draw_text(
             f"Visual update rate: {fps:.1f} FPS",
-            32, 282, selected_font=small
+            32, 302, selected_font=small
         )
 
         draw_text("EVENT LOG", width-312, 28, selected_font=small)
