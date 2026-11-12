@@ -1,0 +1,105 @@
+# CI/CD for the Traffic Management System MVP.
+#   lint    -> blocks on real errors (syntax, undefined names), reports style issues
+#   test    -> full pytest suite on Python 3.10-3.13 (Ubuntu) and 3.12 (Windows),
+#              plus scenario validation and the TMS-NF-003 reliability run
+#   package -> zips the app as a downloadable build artifact (pushes to main and tags)
+#   release -> publishes a GitHub Release with that zip when a v* tag is pushed
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: Traffic_Management_System_MVP
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff==0.17.4
+      - name: Errors (blocking)
+        run: ruff check --isolated --select E9,F63,F7,F82 --output-format github .
+      - name: Style report (non-blocking)
+        run: ruff check --isolated --exit-zero --statistics .
+
+  test:
+    name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})
+    needs: lint
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python: ["3.10", "3.11", "3.12", "3.13"]
+        include:
+          - os: windows-latest
+            python: "3.12"
+    env:
+      SDL_VIDEODRIVER: dummy  # pygame without a screen
+      SDL_AUDIODRIVER: dummy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: Traffic_Management_System_MVP/requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Unit and integration tests
+        run: python -m pytest -q
+      - name: Default scenario is valid (TMS-F-019)
+        run: python -m tools.scenario_cli validate data/scenarios.json
+      - name: Reliability, 5 x 30 simulated minutes (TMS-NF-003)
+        run: python -m tools.reliability_run --runs 5 --minutes 30
+
+  package:
+    name: Package app
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build zip
+        run: |
+          cd ..
+          zip -r tms-mvp.zip Traffic_Management_System_MVP \
+            -x '*/__pycache__/*' '*.pyc' '*/.pytest_cache/*' '*/.venv/*' '*.db' \
+               '*/data/experiments/*' '*/reports/*'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tms-mvp-${{ github.sha }}
+          path: tms-mvp.zip
+
+  release:
+    name: Publish release
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tms-mvp-${{ github.sha }}
+      - name: Create GitHub Release
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" tms-mvp.zip --repo "$GITHUB_REPOSITORY" --generate-notes
