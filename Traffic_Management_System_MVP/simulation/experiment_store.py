@@ -1,7 +1,8 @@
-"""Experiment storage: save configuration + results and reload them.
+"""Experiment storage: save configuration + results, reload them, compare configs.
 
 Requirements covered:
   TMS-F-017  save simulation configuration and experiment results
+  TMS-NF-007 saved experiment files reload with the same configuration values
 
 Loading re-uses the scenario validation layer (TMS-SR-003), so a tampered or
 corrupted experiment file is rejected with a clear message instead of crashing.
@@ -81,3 +82,27 @@ def load_experiment(path: str | Path) -> Experiment:
     results = _validate_results(data.get("results"))
     return Experiment(scenario=scenario, results=results, saved_at=saved_at)
 
+
+def _flatten(value: Any, prefix: str = "") -> dict[str, Any]:
+    if isinstance(value, dict):
+        out = {}
+        for key in value:
+            out.update(_flatten(value[key], f"{prefix}.{key}" if prefix else str(key)))
+        return out
+    if isinstance(value, list):
+        out = {}
+        for idx, item in enumerate(value):
+            out.update(_flatten(item, f"{prefix}[{idx}]"))
+        return out
+    return {prefix: value}
+
+
+def compare_scenarios(a: Scenario, b: Scenario) -> list[str]:
+    """Return human-readable differences between two configurations (empty = identical)."""
+    flat_a, flat_b = _flatten(a.to_dict()), _flatten(b.to_dict())
+    diffs = []
+    for key in sorted(set(flat_a) | set(flat_b)):
+        va, vb = flat_a.get(key, "<missing>"), flat_b.get(key, "<missing>")
+        if va != vb or type(va) is not type(vb):
+            diffs.append(f"{key}: {va!r} -> {vb!r}")
+    return diffs
