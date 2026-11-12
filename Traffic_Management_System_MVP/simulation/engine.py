@@ -1,15 +1,10 @@
-
-"""Simulation Engine: owns the master clock and the run-state controls.
+"""Simulation Engine: owns the master clock, run-state controls, and traffic incidents.
 
 Requirements covered:
   TMS-F-015  pause, resume, step and reset
-  TMS-F-004  drives vehicle movement (via TrafficSimulation) under signal control
-  TMS-F-013  prioritizes simulated emergency vehicles
-  TMS-NF-008 adds timezone-aware timestamps to emitted events
-
-Per the SAD, the engine advances discrete ticks and is independent of the
-Dashboard UI. Interested components (dashboard, event logger) subscribe with
-``add_listener(callback)``; callbacks receive ``(event_type, message, context)``.
+  TMS-F-014  simulate traffic incidents (blocked lanes / stalled vehicles)
+  TMS-F-004  drives vehicle movement under signal control
+  TMS-NF-004 maintain consistent simulation state across control cycles
 """
 from __future__ import annotations
 
@@ -41,7 +36,6 @@ class SimulationEngine:
         self.scenario = scenario
         cfg = scenario.simulation
 
-        # Create the signal controller with optional adaptive settings.
         self.signals = SignalController(
             cfg["green_seconds"],
             cfg["amber_seconds"],
@@ -56,7 +50,6 @@ class SimulationEngine:
 
         self.metrics = Metrics()
 
-        # Create traffic simulation with emergency vehicle support.
         self.traffic = TrafficSimulation(
             scenario.window["width"],
             scenario.window["height"],
@@ -80,16 +73,14 @@ class SimulationEngine:
         self.state = PAUSED if start_paused else RUNNING
         self.clock = 0.0
         self.tick_count = 0
+        self.incidents: list[dict[str, Any]] = []  # TMS-F-014: Active incidents
         self._listeners: list[Listener] = []
-
-    # ------------------------------------------------------------ events
 
     def add_listener(self, callback: Listener) -> None:
         self._listeners.append(callback)
 
     @staticmethod
     def _current_timestamp() -> str:
-        """Return the current timezone-aware ISO 8601 timestamp."""
         return datetime.now(timezone.utc).astimezone().isoformat(
             timespec="milliseconds"
         )
@@ -101,7 +92,20 @@ class SimulationEngine:
         for callback in list(self._listeners):
             callback(event_type, message, context)
 
-    # ------------------------------------------------------------ clock
+    def trigger_incident(self, road_id: str, incident_type: str = "blocked_lane") -> dict[str, Any]:
+        """TMS-F-014: Inject a simulated traffic incident affecting traffic state."""
+        incident = {
+            "road_id": road_id,
+            "type": incident_type,
+            "active": True,
+            "time_triggered": round(self.clock, 2)
+        }
+        self.incidents.append(incident)
+        self._emit("INCIDENT", f"Incident triggered on road {road_id}: {incident_type}", road_id=road_id)
+        return incident
+
+    def clear_incidents(self) -> None:
+        self.incidents.clear()
 
     def _advance(self, dt: float) -> None:
         if (
@@ -115,11 +119,7 @@ class SimulationEngine:
             )
 
         dt = min(float(dt), MAX_TICK_SECONDS)
-
-        # Read current vehicle queues for each approach.
         queue_lengths = self.traffic.queue_lengths_by_direction()
-
-        # Update signals using the current traffic demand.
         transition = self.signals.update(dt, queue_lengths)
 
         if transition:
@@ -129,21 +129,15 @@ class SimulationEngine:
                 phase=transition,
             )
 
-        # Update vehicle movement and detect approaching emergency vehicles.
         self.traffic.update(dt)
-
         self.clock += dt
         self.tick_count += 1
 
     def tick(self, dt: float) -> bool:
-        """Advance by dt if running. Returns True if the clock advanced."""
         if self.state != RUNNING:
             return False
-
         self._advance(dt)
         return True
-
-    # ------------------------------------------------------------ controls
 
     @property
     def paused(self) -> bool:
@@ -163,38 +157,29 @@ class SimulationEngine:
         self.resume() if self.paused else self.pause()
 
     def step(self, dt: float = STEP_SECONDS) -> bool:
-        """Advance exactly one tick while paused. Ignored while running."""
         if self.state != PAUSED:
             return False
-
         self._advance(dt)
         self._emit("CONTROL", f"Stepped {dt:.3f}s")
         return True
 
     def reset(self) -> None:
-        """Return to the scenario's initial state; run/pause state is kept."""
         self.signals.reset()
         self.traffic.reset()
-
+        self.clear_incidents()
         self.traffic.spawn_interval = (
             self.scenario.simulation["spawn_interval_seconds"]
         )
-
         self.clock = 0.0
         self.tick_count = 0
-
         self._emit("CONTROL", "Simulation reset")
 
     def set_spawn_interval(self, seconds: float) -> float:
         self.traffic.spawn_interval = min(5.0, max(0.25, float(seconds)))
         return self.traffic.spawn_interval
 
-    # ------------------------------------------------------------ state
-
     def snapshot(self) -> dict[str, Any]:
-        """Current run state: compares runs and is saved as experiment results (TMS-F-017)."""
         m = self.metrics
-
         return {
             "scenario_name": self.scenario.name,
             "sim_time_seconds": round(self.clock, 6),
@@ -203,6 +188,7 @@ class SimulationEngine:
             "vehicles_active": len(self.traffic.vehicles),
             "vehicles_spawned": m.spawned,
             "vehicles_completed": m.completed,
+            "active_incidents": len(self.incidents),
             "total_wait_seconds": round(m.total_wait_seconds, 6),
             "average_wait_seconds": round(m.average_wait_seconds, 6),
             "average_travel_time_seconds": round(m.average_travel_time_seconds, 6),
