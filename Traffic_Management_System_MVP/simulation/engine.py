@@ -5,6 +5,7 @@ Requirements covered:
   TMS-F-015  pause, resume, step and reset
   TMS-F-004  drives vehicle movement (via TrafficSimulation) under signal control
   TMS-F-013  prioritizes simulated emergency vehicles
+  TMS-NF-008 adds timezone-aware timestamps to emitted events
 
 Per the SAD, the engine advances discrete ticks and is independent of the
 Dashboard UI. Interested components (dashboard, event logger) subscribe with
@@ -13,6 +14,7 @@ Dashboard UI. Interested components (dashboard, event logger) subscribe with
 from __future__ import annotations
 
 import math
+from datetime import datetime, timezone
 from typing import Any, Callable
 
 from simulation.metrics import Metrics
@@ -85,8 +87,16 @@ class SimulationEngine:
     def add_listener(self, callback: Listener) -> None:
         self._listeners.append(callback)
 
+    @staticmethod
+    def _current_timestamp() -> str:
+        """Return the current timezone-aware ISO 8601 timestamp."""
+        return datetime.now(timezone.utc).astimezone().isoformat(
+            timespec="milliseconds"
+        )
+
     def _emit(self, event_type: str, message: str, **context: Any) -> None:
         context.setdefault("sim_time", round(self.clock, 3))
+        context["timestamp"] = self._current_timestamp()
 
         for callback in list(self._listeners):
             callback(event_type, message, context)
