@@ -39,7 +39,9 @@ class SecureAPIClient:
         if not endpoint or endpoint.startswith("//"):
             raise ValueError("A valid API endpoint is required.")
 
-        if urlparse(endpoint).scheme or urlparse(endpoint).netloc:
+        parsed_endpoint = urlparse(endpoint)
+
+        if parsed_endpoint.scheme or parsed_endpoint.netloc:
             raise ValueError("Use a relative API endpoint, not another URL.")
 
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
@@ -66,13 +68,15 @@ class SecureAPIClient:
 
         except HTTPError as exc:
             raise SecureAPIError(
-                f"API returned HTTP status {exc.code}."
-            ) from exc
-        except URLError as exc:
+                f"API request failed with HTTP status {exc.code}."
+            ) from None
+
+        except URLError:
             raise SecureAPIError(
-                f"Unable to connect securely to the API: {exc.reason}"
-            ) from exc
-        except (TimeoutError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+                "Unable to connect securely to the external API."
+            ) from None
+
+        except (TimeoutError, json.JSONDecodeError, UnicodeDecodeError):
             raise SecureAPIError(
-                f"API request failed: {exc}"
-            ) from exc
+                "API request failed due to a timeout or invalid response."
+            ) from None
