@@ -1,16 +1,20 @@
-"""Operator tool to create and validate scenarios.
+"""Operator tool to create, validate and compare scenarios.
 
-Requirements covered: TMS-F-001 (create), TMS-F-019 / TMS-SR-003 (validate).
+Requirements covered: TMS-F-001 (create), TMS-F-019 / TMS-SR-003 (validate),
+TMS-NF-007 (compare a saved experiment's configuration with another file).
 
 Examples (run from the Traffic_Management_System_MVP folder):
     python -m tools.scenario_cli create --name "Rush hour" --approaches N,S,E \
         --spawn-interval 0.6 --green 15 --out data/scenarios/rush_hour.json
     python -m tools.scenario_cli validate data/scenarios/rush_hour.json
+    python -m tools.scenario_cli compare data/scenarios/rush_hour.json \
+        data/experiments/experiment_20261112_101500.json
     python main.py --scenario data/scenarios/rush_hour.json
 """
 import argparse
 import sys
 
+from simulation.experiment_store import compare_scenarios
 from simulation.scenario import ScenarioError, create_scenario, load_scenario, save_scenario
 
 OPTION_TO_KEY = {
@@ -47,6 +51,9 @@ def main(argv=None) -> int:
     create.add_argument("--force", action="store_true", help="overwrite an existing file")
     check = sub.add_parser("validate", help="validate a scenario or saved experiment file")
     check.add_argument("path")
+    diff = sub.add_parser("compare", help="compare the configurations in two files")
+    diff.add_argument("first")
+    diff.add_argument("second")
     args = parser.parse_args(argv)
 
     try:
@@ -57,8 +64,12 @@ def main(argv=None) -> int:
             scenario = create_scenario(args.name, approaches, args.intersection_id, **overrides)
             path = save_scenario(args.out, scenario, overwrite=args.force)
             print(f"Created {path}\n{_summary(scenario)}")
-        else:
+        elif args.command == "validate":
             print(f"VALID: {_summary(load_scenario(args.path))}")
+        else:
+            diffs = compare_scenarios(load_scenario(args.first), load_scenario(args.second))
+            print("\n".join(diffs) if diffs else "IDENTICAL: no configuration differences")
+            return 1 if diffs else 0
         return 0
     except ScenarioError as exc:
         print(f"INVALID: {exc}", file=sys.stderr)
