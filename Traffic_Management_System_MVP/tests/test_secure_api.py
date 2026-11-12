@@ -133,3 +133,27 @@ def test_get_handles_invalid_json(monkeypatch):
 
     with pytest.raises(SecureAPIError, match="API request failed"):
         client.get("data")
+
+
+from urllib.error import URLError
+
+
+def test_get_handles_connection_failure(monkeypatch):
+    def fake_urlopen(*args, **kwargs):
+        raise URLError("Connection refused")
+
+    monkeypatch.setattr(
+        "simulation.secure_api.urlopen",
+        fake_urlopen,
+    )
+
+    client = SecureAPIClient(
+        "https://example.com",
+        token="test-token",
+    )
+
+    with pytest.raises(
+        SecureAPIError,
+        match="Unable to connect securely",
+    ):
+        client.get("data")
