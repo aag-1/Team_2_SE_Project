@@ -132,6 +132,40 @@ Traffic_Management_System_MVP/
    installing requirements. On macOS, pygame 2.6.1 fonts fail on Python 3.14; use a
    Python 3.12 virtual environment to run the window.
 
+
+
+## Secure external API communication
+
+The optional `SecureAPIClient` supports secure communication with external
+traffic sensor/API services.
+
+- Remote API URLs must use HTTPS.
+- Server certificates are verified using Python's default SSL context.
+- Requests use Bearer-token authentication.
+- API tokens should be stored in the `TRAFFIC_API_TOKEN` environment variable.
+- Requests use a configurable timeout and handle connection and response errors.
+
+### Configure the API token (Windows PowerShell)
+
+```powershell
+$env:TRAFFIC_API_TOKEN = "your-api-token"
+```
+
+### Example usage
+
+```python
+from simulation.secure_api import SecureAPIClient
+
+client = SecureAPIClient("https://example.com/api")
+data = client.get("sensors/data")
+
+print(data)
+```
+
+The client is optional. The simulator does not require a live external API
+or physical sensors to run.
+
+
 ## Current MVP boundaries
 
 The visual model uses a single straight-through lane per approach. It is an
