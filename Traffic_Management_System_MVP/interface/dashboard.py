@@ -5,12 +5,14 @@ from datetime import datetime
 import pygame
 
 from simulation.engine import SimulationEngine
+from simulation.experiment_store import save_experiment
 from simulation.scenario import Scenario, load_scenario
 from simulation.report import save_summary_report
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 CONFIG_PATH = BASE_DIR / "data" / "scenarios.json"
 REPORT_DIR = BASE_DIR / "reports"
+EXPERIMENT_DIR = BASE_DIR / "data" / "experiments"
 
 COLORS = {
     "background": (238, 241, 244),
@@ -257,7 +259,7 @@ def run_app(scenario: Scenario | None = None):
         )
 
         draw_text(
-            "SPACE: pause   N: step   R: reset   P: report"
+            "SPACE: pause   N: step   R: reset   P: report   S: save"
             "   UP/DOWN: traffic rate   ESC: quit",
             width-700, height-48, COLORS["text"], small
         )
@@ -293,6 +295,15 @@ def run_app(scenario: Scenario | None = None):
                         log(f"Summary report saved: {report_path.name}")
                     except (OSError, ValueError) as exc:
                         log(f"Report generation failed: {exc}")
+
+                elif event.key == pygame.K_s:
+                    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    target = EXPERIMENT_DIR / f"experiment_{stamp}.json"
+                    try:
+                        save_experiment(target, scenario, engine.snapshot())
+                        log(f"Experiment saved: {target.name}")
+                    except (OSError, ValueError) as exc:
+                        log(f"Save failed: {exc}")
 
                 elif event.key == pygame.K_UP:
                     value = engine.set_spawn_interval(
