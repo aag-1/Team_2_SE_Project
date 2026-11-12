@@ -5,7 +5,7 @@ import pytest
 
 from simulation.engine import SimulationEngine
 from simulation.scenario import (Scenario, ScenarioError, create_scenario, load_scenario,
-                                 validate_structure)
+                                 validate_scenario)
 from tools import scenario_cli
 
 
@@ -28,13 +28,13 @@ def test_operator_can_configure_roads_and_intersection():
 
 
 def test_scenario_round_trips_through_to_dict(raw_default):
-    sc = validate_structure(raw_default)
-    assert validate_structure(sc.to_dict()) == sc
+    sc = validate_scenario(raw_default)
+    assert validate_scenario(sc.to_dict()) == sc
 
 
 def test_file_without_network_gets_default_roads(raw_default):
     del raw_default["network"]
-    assert validate_structure(raw_default).approaches == ("N", "S", "E", "W")
+    assert validate_scenario(raw_default).approaches == ("N", "S", "E", "W")
 
 
 def test_cli_create_writes_loadable_file(tmp_path, capsys):
@@ -63,7 +63,7 @@ def test_cli_rejects_bad_approach(tmp_path):
     (lambda d: d["network"]["roads"][2].update(intersection="INT-99"),
      "does not match a defined intersection"),
     (lambda d: d["network"]["roads"][3].update(approach="NE"), "approach must be one of"),
-    (lambda d: d["network"]["roads"][0].pop("id"), "needs 'id'"),
+    (lambda d: d["network"]["roads"][0].pop("id"), "missing required field\\(s\\): id"),
     (lambda d: d["network"]["intersections"].append({"id": "INT-2"}), "exactly one intersection"),
     (lambda d: d["network"].update(roads=[]), "non-empty list"),
     (lambda d: d.pop("simulation"), "missing the 'simulation' section"),
@@ -71,7 +71,7 @@ def test_cli_rejects_bad_approach(tmp_path):
 def test_structural_problems_are_rejected(raw_default, mutate, expected):
     mutate(raw_default)
     with pytest.raises(ScenarioError, match=expected):
-        validate_structure(raw_default)
+        validate_scenario(raw_default)
 
 
 def test_engine_refuses_raw_dict(raw_default):

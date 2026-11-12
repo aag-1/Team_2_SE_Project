@@ -62,6 +62,7 @@ python main.py
 - **Space** — pause / resume
 - **N** — advance one simulation step while paused
 - **R** — reset the simulation (same scenario, same arrival sequence)
+- **S** — save the configuration + current results to `data/experiments/`
 - **Up / Down** — increase / decrease vehicle spawn rate
 - **Esc** — quit
 
@@ -70,11 +71,28 @@ python main.py
 ```bash
 python -m tools.scenario_cli create --name "Rush hour" --approaches N,S,E \
     --spawn-interval 0.6 --green 15 --out data/scenarios/rush_hour.json
+python -m tools.scenario_cli validate data/scenarios/rush_hour.json
 python main.py --scenario data/scenarios/rush_hour.json
 ```
 
-The current model supports one four-way intersection; scenarios with more than
-one intersection are rejected with an explicit message.
+Scenario files are validated before the window opens. An invalid file stops
+`main.py` with exit code 2 and lists every problem found (missing fields,
+out-of-range values, unknown fields, NaN/Infinity, duplicate keys, oversized or
+non-UTF-8 files). The current model supports one four-way intersection;
+scenarios with more than one intersection are rejected with an explicit message.
+
+## Experiments and reliability
+
+```bash
+python main.py --scenario data/experiments/experiment_20261112_101500.json
+python -m tools.scenario_cli compare data/scenarios.json data/experiments/experiment_20261112_101500.json
+python -m tools.reliability_run --runs 5 --minutes 30
+```
+
+A saved experiment (key **S**) holds the full configuration and the results at
+the time of saving. It can be run again with `--scenario`, and `compare` shows
+any configuration differences. The reliability run checks 5 consecutive
+30-minute simulated runs without the window (TMS-NF-003).
 
 ## Project structure
 
@@ -88,7 +106,8 @@ Traffic_Management_System_MVP/
 ├── simulation/
 │   ├── __init__.py
 │   ├── engine.py      # master clock + pause/resume/step/reset
-│   ├── scenario.py    # scenario model: roads + intersection
+│   ├── scenario.py    # scenario model + validation layer
+│   ├── experiment_store.py  # save / reload / compare experiments
 │   ├── signals.py
 │   ├── traffic.py
 │   └── metrics.py
@@ -96,7 +115,8 @@ Traffic_Management_System_MVP/
 │   ├── __init__.py
 │   └── dashboard.py
 ├── tools/
-│   └── scenario_cli.py   # create scenario files
+│   ├── scenario_cli.py     # create / validate / compare scenario files
+│   └── reliability_run.py  # 5 x 30-minute headless reliability run
 └── tests/                # python -m pytest -q
 ```
 
