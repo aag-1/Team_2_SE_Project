@@ -192,7 +192,7 @@ class SimulationEngine:
     # ------------------------------------------------------------ state
 
     def snapshot(self) -> dict[str, Any]:
-        """Current run state, used to compare runs (e.g. reset reproducibility)."""
+        """Current run state: compares runs and is saved as experiment results (TMS-F-017)."""
         m = self.metrics
 
         return {
@@ -204,5 +204,8 @@ class SimulationEngine:
             "vehicles_spawned": m.spawned,
             "vehicles_completed": m.completed,
             "total_wait_seconds": round(m.total_wait_seconds, 6),
+            "average_wait_seconds": round(m.average_wait_seconds, 6),
+            "average_travel_time_seconds": round(m.average_travel_time_seconds, 6),
+            "throughput_per_minute": round(m.throughput_per_minute, 6),
             "spawn_interval_seconds": self.traffic.spawn_interval,
         }
